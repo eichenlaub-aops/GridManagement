@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Power Grid Game</title>
+<style>
+  body {
+    font-family: sans-serif;
+    margin: 20px;
+    background: #f0f0f0;
+  }
+  h1, h2 {
+    margin-bottom: 10px;
+  }
+  .game-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+  }
+  .status, .market, .actions, .history {
+    background: #fff;
+    padding: 20px;
+    border-radius: 8px;
+    flex: 1 1 300px;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+  th, td {
+    border-bottom: 1px solid #ccc;
+    padding: 3px 5px;
+  }
+  .controls {
+    margin-top: 10px;
+  }
+  button {
+    padding: 5px 10px;
+    margin-right: 5px;
+  }
+  .info {
+    font-size: 14px;
+    color: #555;
+  }
+  .dimmed {
+    opacity: 0.5;
+    pointer-events: none;
+  }
+  .red { color: red; }
+  .green { color: green; }
+  
+  /* Added styles for history table */
+  .history {
+    width: 100%;
+    overflow-x: auto;
+    margin-top: 20px;
+  }
+  .history table {
+    min-width: 100%;
+  }
+</style>
+
+<script>
+// Game State
+let money = 12;
+let citySize = 1;
+let storageAmount = 0;
+let nuclearCount = 0;
+let gasCount = 0;
+let solarCount = 0;
+let windCount = 0;
+let storageCount = 0;
+let turnNumber = 1;
+let step = "market";
+let demand = 0;
+let solarProd = 0;
+let windProd = 0;
+let nuclearProd = 0;
+let solarRoll = 0;
+let windRoll = 0;
+let purchasesThisTurn = [];
+let initialCitySize = citySize;
+let initialMoney = money;
+let initialStorage = storageAmount;
+
+function getStorageCapacity() {
+  return 10 * storageCount;
+}
+
+function showGameOver(message) {
+  document.getElementById('gameOverMessage').textContent = message;
+  document.getElementById('gameOverPopup').style.display = 'block';
+  // Disable all game controls
+  document.querySelector('.game-container').style.pointerEvents = 'none';
+  document.querySelector('.game-container').style.opacity = '0.7';
+}
+
+function restartGame() {
+  // Reset all game state variables
+  money = 12;
+  citySize = 1;
+  storageAmount = 0;
+  nuclearCount = 0;
+  gasCount = 0;
+  solarCount = 0;
+  windCount = 0;
+  storageCount = 0;
+  turnNumber = 1;
+  step = "market";
+  demand = 0;
+  solarProd = 0;
+  windProd = 0;
+  nuclearProd = 0;
+  solarRoll = 0;
+  windRoll = 0;
+  purchasesThisTurn = [];
+  initialCitySize = citySize;
+  initialMoney = money;
+  initialStorage = storageAmount;
+
+  // Reset UI
+  document.getElementById('gameOverPopup').style.display = 'none';
+  document.querySelector('.game-container').style.pointerEvents = 'auto';
+  document.querySelector('.game-container').style.opacity = '1';
+  
+  // Clear history
+  document.querySelector("#historyTable tbody").innerHTML = '';
+  
+  // Reset all displays
+  document.getElementById('demandResult').textContent = '-';
+  document.getElementById('solarProduction').textContent = '-';
+  document.getElementById('windProduction').textContent = '-';
+  document.getElementById('nuclearProduction').textContent = '-';
+  document.getElementById('remainingDemand').textContent = '-';
+  document.getElementById('excessSupply').textContent = '-';
+  document.getElementById('remainingDemand').className = '';
+  document.getElementById('gasProduction').value = '0';
+  document.getElementById('storageIn').value = '0';
+  document.getElementById('storageOut').value = '0';
+  
+  updateUI();
+}
+
+function giveUp() {
+  const message = `You Gave Up! Your city grew to size ${citySize} in ${turnNumber} turns.`;
+  showGameOver(message);
+}
+
+function maxGas() {
+  if (step !== "roll_done") return;
+  const maxProduction = 6 * gasCount;
+  document.getElementById('gasProduction').value = maxProduction;
+  updateDynamicRemainingDemand();
+}
+
+function maxStorageIn() {
+  if (step !== "roll_done") return;
+  const gasProd = parseInt(document.getElementById('gasProduction').value, 10) || 0;
+  const maxStore = Math.min(
+    solarProd + windProd + nuclearProd + gasProd, // can't store more than we produce
+    getStorageCapacity() - storageAmount // can't exceed capacity
+  );
+  document.getElementById('storageIn').value = maxStore;
+  updateDynamicRemainingDemand();
+}
+
+function maxStorageOut() {
+  if (step !== "roll_done") return;
+  document.getElementById('storageOut').value = storageAmount; // can't remove more than we have
+  updateDynamicRemainingDemand();
+}
+
+function updateUI() {
+  document.getElementById('money').textContent = money;
+  document.getElementById('citySize').textContent = citySize;
+  document.getElementById('storageAmount').textContent = storageAmount;
+  document.getElementById('storageCapacity').textContent = getStorageCapacity();
+  document.getElementById('turnNumber').textContent = turnNumber;
+
+  document.getElementById('nuclearCount').textContent = nuclearCount;
+  document.getElementById('gasCount').textContent = gasCount;
+  document.getElementById('solarCount').textContent = solarCount;
+  document.getElementById('windCount').textContent = windCount;
+  document.getElementById('storageCount').textContent = storageCount;
+
+  const marketSection = document.getElementById('marketSection');
+  const adjustSection = document.getElementById('adjustSection');
+
+  if (step === "market") {
+    marketSection.classList.remove('dimmed');
+    adjustSection.classList.add('dimmed');
+  } else if (step === "roll_done") {
+    marketSection.classList.add('dimmed');
+    adjustSection.classList.remove('dimmed');
+  }
+}
+
+function rollDie() {
+  return Math.floor(Math.random() * 6) + 1;
+}
+
+function buy(type) {
+  if (step !== "market") return;
+  let cost = 0;
+  let name = "";
+  switch(type) {
+    case 'nuclear': cost = 10; name="Nuclear"; break;
+    case 'gas': cost = 10; name="Gas"; break;
+    case 'solar': cost = 3; name="Solar"; break;
+    case 'wind': cost = 3; name="Wind"; break;
+    case 'storage': cost = 4; name="Storage"; break;
+  }
+
+  if (money >= cost) {
+    money -= cost;
+    if (type === 'nuclear') nuclearCount++;
+    else if (type === 'gas') gasCount++;
+    else if (type === 'solar') solarCount++;
+    else if (type === 'wind') windCount++;
+    else if (type === 'storage') storageCount++;
+
+    purchasesThisTurn.push(name);
+  }
+  updateUI();
+}
+
+function doneMarket() {
+  if (step !== "market") return;
+  
+  demand = 0;
+  for (let i = 0; i < citySize; i++) {
+    demand += rollDie();
+  }
+  solarRoll = rollDie();
+  windRoll = rollDie();
+  solarProd = solarRoll * solarCount;
+  windProd = windRoll * windCount;
+  nuclearProd = nuclearCount * 8;
+
+  document.getElementById('demandResult').textContent = `${demand} (City Size: ${citySize})`;
+  document.getElementById('solarProduction').textContent = `${solarProd} (roll: ${solarRoll})`;
+  document.getElementById('windProduction').textContent = `${windProd} (roll: ${windRoll})`;
+  document.getElementById('nuclearProduction').textContent = nuclearProd;
+
+  step = "roll_done";
+  updateUI();
+  updateDynamicRemainingDemand();
+}
+
+function updateDynamicRemainingDemand() {
+  if (step !== "roll_done") return;
+  let gasProd = parseInt(document.getElementById('gasProduction').value, 10) || 0;
+  let storageIn = parseInt(document.getElementById('storageIn').value, 10) || 0;
+  let storageOut = parseInt(document.getElementById('storageOut').value, 10) || 0;
+
+  let finalSupply = solarProd + windProd + nuclearProd + gasProd + storageOut - storageIn;
+  let remaining = Math.max(0, demand - finalSupply);
+  let excess = Math.max(0, finalSupply - demand);
+
+  const remSpan = document.getElementById('remainingDemand');
+  const excSpan = document.getElementById('excessSupply');
+  
+  remSpan.textContent = remaining;
+  excSpan.textContent = excess;
+
+  remSpan.className = remaining > 0 ? 'red' : 'green';
+  excSpan.className = excess > 0 ? 'red' : 'green';
+}
+
+function finalizeRound() {
+  if (step !== "roll_done") return;
+
+  let gasProd = parseInt(document.getElementById('gasProduction').value, 10) || 0;
+  let storageIn = parseInt(document.getElementById('storageIn').value, 10) || 0;
+  let storageOut = parseInt(document.getElementById('storageOut').value, 10) || 0;
+
+  // Validate gas
+  if (gasProd > 6 * gasCount) {
+    alert("You can't produce more gas than 6 * gasCount.");
+    return;
+  }
+
+  let supplyBeforeStorage = solarProd + windProd + nuclearProd + gasProd;
+
+  // Storage checks
+  if (storageOut > storageAmount) {
+    alert("Not enough energy in storage to remove that amount.");
+    return;
+  }
+  if (storageIn > supplyBeforeStorage) {
+    alert("Can't store more energy than produced this turn.");
+    return;
+  }
+
+  let finalStorage = storageAmount + storageIn - storageOut;
+  if (finalStorage > getStorageCapacity()) {
+    alert(`Can't exceed ${getStorageCapacity()} power in storage.`);
+    return;
+  }
+  if (finalStorage < 0) {
+    alert("Storage can't go negative.");
+    return;
+  }
+
+  let finalSupply = supplyBeforeStorage + storageOut - storageIn;
+  let outcome = '';
+  if (finalSupply === demand) {
+    citySize += 1;
+    money += 4;
+    outcome = "Perfect match! City size grew by 1 and you earn 4 money.";
+	
+	  // Add this check for victory
+  if (citySize >= 10) {
+    outcome = "Perfect match! You've won the game!";
+    showGameOver(`You Won! Your city grew to size 10 in ${turnNumber} turns.`);
+    return;
+  }
+  } else {
+    outcome = "Mismatch. No growth and no income.";
+  }
+
+  // Update storage
+  storageAmount = finalStorage;
+
+  // Log history
+  const tbody = document.querySelector("#historyTable tbody");
+  const row = document.createElement("tr");
+  row.innerHTML = `
+    <td>${turnNumber}</td>
+    <td>${initialCitySize}</td>
+    <td>${initialMoney}</td>
+    <td>${initialStorage}</td>
+    <td>${purchasesThisTurn.join(", ")}</td>
+    <td>${demand}</td>
+    <td>${solarRoll}</td>
+    <td>${windRoll}</td>
+    <td>${solarProd}</td>
+    <td>${windProd}</td>
+    <td>${nuclearProd}</td>
+    <td>${gasProd}</td>
+    <td>${storageIn}</td>
+    <td>${storageOut}</td>
+    <td>${finalSupply}</td>
+    <td>${outcome}</td>
+  `;
+  tbody.appendChild(row);
+
+  // Reset for next round
+  turnNumber += 1;
+  step = "market";
+  purchasesThisTurn = [];
+  initialCitySize = citySize;
+  initialMoney = money;
+  initialStorage = storageAmount;
+  
+  // Reset UI elements
+  document.getElementById('demandResult').textContent = '-';
+  document.getElementById('solarProduction').textContent = '-';
+  document.getElementById('windProduction').textContent = '-';
+  document.getElementById('nuclearProduction').textContent = '-';
+  document.getElementById('remainingDemand').textContent = '-';
+  document.getElementById('excessSupply').textContent = '-';
+  document.getElementById('remainingDemand').className = '';
+  document.getElementById('gasProduction').value = '0';
+  document.getElementById('storageIn').value = '0';
+  document.getElementById('storageOut').value = '0';
+  
+  updateUI();
+}
+
+// Wait for DOM to be ready before initializing
+document.addEventListener('DOMContentLoaded', function() {
+  updateUI();
+});
+</script>
+</head>
+
+<body>
+<h1>Power Grid Game</h1>
+
+<div class="game-container">
+  <div class="status">
+    <h2>Status</h2>
+    <p>Turn: <span id="turnNumber">1</span></p>
+    <p>City Size: <span id="citySize">1</span></p>
+    <p>Storage: <span id="storageAmount">0</span> / <span id="storageCapacity">0</span></p>
+    
+    <h3>How to Play</h3>
+    <p>
+      1. **Market Step**: Buy grid elements using your money. Elements affect your energy production and storage.<br>
+      2. **Done with Market**: After buying, click "Done with Market". The game rolls demand and solar/wind production.<br>
+      3. **Adjust Gas & Storage**: Choose how much gas power to produce (0 to 6 per gas unit) and adjust storage.<br>
+      4. **Finalize Round**: Match demand exactly to grow your city and earn money. If not exact, no growth and no earnings.<br>
+      5. **Goal**: Grow your city to size 10.
+    </p>
+  </div>
+
+  <div class="market">
+    <h2>Market - Money: <span id="money">12</span></h2>
+    <div id="marketSection">
+      <table>
+        <thead>
+          <tr><th>Type</th><th>Cost</th><th>Owned</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>
+              Nuclear
+              <div class="info">Produces 8 power each</div>
+            </td>
+            <td>10</td>
+            <td>
+              <span id="nuclearCount">0</span>
+              <div class="controls">
+                <button onclick="buy('nuclear')">Buy Nuclear</button>
+              </div>
+            </td>
+          </tr>
+          <tr>
+            <td>
+              Natural Gas
+              <div class="info">Produces 0 to 6 per unit</div>
+            </td>
+            <td>10</td>
+            <td>
+              <span id="gasCount">0</span>
+              <div class="controls">
+                <button onclick="buy('gas')">Buy Gas</button>
+              </div>
+            </td>
+          </tr>
+          <tr>
+            <td>
+              Solar
+              <div class="info">Produces (die roll) * count</div>
+            </td>
+            <td>3</td>
+            <td>
+              <span id="solarCount">0</span>
+              <div class="controls">
+                <button onclick="buy('solar')">Buy Solar</button>
+              </div>
+            </td>
+          </tr>
+          <tr>
+            <td>
+              Wind
+              <div class="info">Produces (die roll) * count</div>
+            </td>
+            <td>3</td>
+            <td>
+              <span id="windCount">0</span>
+              <div class="controls">
+                <button onclick="buy('wind')">Buy Wind</button>
+              </div>
+            </td>
+          </tr>
+          <tr>
+            <td>
+              Storage
+              <div class="info">Capacity = 10 * owned</div>
+            </td>
+            <td>4</td>
+            <td>
+              <span id="storageCount">0</span>
+              <div class="controls">
+                <button onclick="buy('storage')">Buy Storage</button>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="controls">
+        <button onclick="doneMarket()">Done with Market</button>
+      </div>
+    </div>
+  </div>
+  
+ <div class="actions">
+    <h2>Round Rolls</h2>
+    <p>Demand: <span id="demandResult">-</span></p>
+    <p>Solar Production: <span id="solarProduction">-</span></p>
+    <p>Wind Production: <span id="windProduction">-</span></p>
+    <p>Nuclear Production: <span id="nuclearProduction">-</span></p>
+
+    <h2>Adjust Gas & Storage</h2>
+    <div id="adjustSection">
+      <table>
+        <tbody>
+			<tr>
+			  <td>Gas Production (0 to 6 * gasCount):</td>
+			  <td style="display: flex; align-items: center; gap: 5px;">
+				<input type="number" id="gasProduction" value="0" min="0" oninput="updateDynamicRemainingDemand()"/>
+				<button onclick="maxGas()" style="padding: 2px 6px; font-size: 12px;">Max</button>
+			  </td>
+			</tr>
+			<tr>
+			  <td>Send to Storage:</td>
+			  <td style="display: flex; align-items: center; gap: 5px;">
+				<input type="number" id="storageIn" value="0" min="0" oninput="updateDynamicRemainingDemand()"/>
+				<button onclick="maxStorageIn()" style="padding: 2px 6px; font-size: 12px;">Max</button>
+			  </td>
+			</tr>
+			<tr>
+			  <td>Remove from Storage:</td>
+			  <td style="display: flex; align-items: center; gap: 5px;">
+				<input type="number" id="storageOut" value="0" min="0" oninput="updateDynamicRemainingDemand()"/>
+				<button onclick="maxStorageOut()" style="padding: 2px 6px; font-size: 12px;">Max</button>
+			  </td>
+			</tr>
+        </tbody>
+      </table>
+
+      <p>Remaining Demand: <span id="remainingDemand">-</span></p>
+      <p>Excess Supply: <span id="excessSupply">-</span></p>
+      <div class="controls">
+        <button onclick="finalizeRound()">Finalize Round</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="gameOverPopup" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); 
+    background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); text-align: center;">
+  <h2 id="gameOverMessage"></h2>
+  <button onclick="restartGame()" style="padding: 10px 20px; font-size: 16px; margin-top: 10px;">Play Again</button>
+</div>
+
+<button onclick="giveUp()" style="margin: 20px 0; padding: 5px 10px;">Give Up</button>
+
+<div class="history">
+  <h2>History</h2>
+  <table id="historyTable">
+    <thead>
+      <tr>
+        <th>Turn</th>
+        <th>Initial City Size</th>
+        <th>Initial Money</th>
+        <th>Initial Stored Energy</th>
+        <th>Bought This Turn</th>
+        <th>Demand</th>
+        <th>Solar Roll</th>
+        <th>Wind Roll</th>
+        <th>Solar Prod</th>
+        <th>Wind Prod</th>
+        <th>Nuclear Prod</th>
+        <th>Gas Prod</th>
+        <th>Storage In</th>
+        <th>Storage Out</th>
+        <th>Total Supply</th>
+        <th>Outcome</th>
+      </tr>
+    </thead>
+    <tbody>
+    </tbody>
+  </table>
+</div>
+
+</body>
+</html>
