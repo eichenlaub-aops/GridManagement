@@ -285,6 +285,16 @@ function showSettings() {
   document.getElementById('settingsPanel').style.display = 'block';
   document.querySelector('.game-container').style.pointerEvents = 'none';
   document.querySelector('.game-container').style.opacity = '0.7';
+  
+  // Set input values from gameConfig
+  document.getElementById('nuclearCost').value = gameConfig.nuclearCost;
+  document.getElementById('nuclearPower').value = gameConfig.nuclearPower;
+  document.getElementById('gasCost').value = gameConfig.gasCost;
+  document.getElementById('gasMaxPower').value = gameConfig.gasMaxPower;
+  document.getElementById('solarCost').value = gameConfig.solarCost;
+  document.getElementById('windCost').value = gameConfig.windCost;
+  document.getElementById('storageCost').value = gameConfig.storageCost;
+  document.getElementById('storageCapacity').value = gameConfig.storageCapacity;
 }
 
 function applySettings() {
@@ -590,35 +600,35 @@ showSettings();
   <table>
     <tr>
       <td>Nuclear Plant Cost:</td>
-      <td><input type="number" id="nuclearCost" value="10" min="1"/></td>
+      <td><input type="number" id="nuclearCost" min="1"/></td>
     </tr>
     <tr>
       <td>Nuclear Power Output:</td>
-      <td><input type="number" id="nuclearPower" value="8" min="1"/></td>
+      <td><input type="number" id="nuclearPower" min="1"/></td>
     </tr>
     <tr>
       <td>Gas Plant Cost:</td>
-      <td><input type="number" id="gasCost" value="10" min="1"/></td>
+      <td><input type="number" id="gasCost" min="1"/></td>
     </tr>
     <tr>
       <td>Gas Max Power:</td>
-      <td><input type="number" id="gasMaxPower" value="6" min="1"/></td>
+      <td><input type="number" id="gasMaxPower" min="1"/></td>
     </tr>
     <tr>
       <td>Solar Plant Cost:</td>
-      <td><input type="number" id="solarCost" value="3" min="1"/></td>
+      <td><input type="number" id="solarCost" min="1"/></td>
     </tr>
     <tr>
       <td>Wind Plant Cost:</td>
-      <td><input type="number" id="windCost" value="3" min="1"/></td>
+      <td><input type="number" id="windCost" min="1"/></td>
     </tr>
     <tr>
       <td>Storage Cost:</td>
-      <td><input type="number" id="storageCost" value="4" min="1"/></td>
+      <td><input type="number" id="storageCost" min="1"/></td>
     </tr>
     <tr>
       <td>Storage Capacity (per unit):</td>
-      <td><input type="number" id="storageCapacity" value="10" min="1"/></td>
+      <td><input type="number" id="storageCapacity" min="1"/></td>
     </tr>
   </table>
   <button onclick="applySettings()" style="margin-top: 10px;">Start Game</button>
