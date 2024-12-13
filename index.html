@@ -66,14 +66,14 @@
 // Game State
 // Add these variables at the top with other game state variables
 let gameConfig = {
-  nuclearCost: 10,
-  nuclearPower: 8,
-  gasCost: 10,
-  gasMaxPower: 6,
+  nuclearCost: 5,
+  nuclearPower: 4,
+  gasCost: 5,
+  gasMaxPower: 3,
   solarCost: 3,
   windCost: 3,
-  storageCost: 4,
-  storageCapacity: 10
+  storageCost: 2,
+  storageCapacity: 5
 };
 let money = 12;
 let citySize = 1;
@@ -319,6 +319,7 @@ function updateCostDisplay() {
   // Update info text for nuclear and gas
   rows[0].querySelector('.info').textContent = `Produces ${gameConfig.nuclearPower} power each`;
   rows[1].querySelector('.info').textContent = `Produces 0 to ${gameConfig.gasMaxPower} per unit`;
+	rows[4].querySelector('.info').textContent = `Capacity = ${gameConfig.storageCapacity} * owned`;
 }
 
 function finalizeRound() {
