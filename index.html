@@ -63,9 +63,7 @@
 </style>
 
 <script>
-// Game State
-// Add these variables at the top with other game state variables
-let gameConfig = {
+const DEFAULTS = {
   nuclearCost: 5,
   nuclearPower: 4,
   gasCost: 5,
@@ -75,6 +73,12 @@ let gameConfig = {
   storageCost: 2,
   storageCapacity: 5
 };
+
+// Then initialize gameConfig using these defaults
+let gameConfig = {...DEFAULTS};
+
+// Game State
+
 let money = 12;
 let citySize = 1;
 let storageAmount = 0;
@@ -153,6 +157,7 @@ function restartGame() {
   document.getElementById('storageOut').value = '0';
   
   updateUI();
+  updateCostDisplay();
 }
 
 function giveUp() {
@@ -263,6 +268,7 @@ function doneMarket() {
 
 function updateDynamicRemainingDemand() {
   if (step !== "roll_done") return;
+  
   let gasProd = parseInt(document.getElementById('gasProduction').value, 10) || 0;
   let storageIn = parseInt(document.getElementById('storageIn').value, 10) || 0;
   let storageOut = parseInt(document.getElementById('storageOut').value, 10) || 0;
@@ -279,14 +285,31 @@ function updateDynamicRemainingDemand() {
 
   remSpan.className = remaining > 0 ? 'red' : 'green';
   excSpan.className = excess > 0 ? 'red' : 'green';
+
+  updateGasProductionLabel();
+  updateStorageLabels();
+  updateButtonStates();
 }
 
 function showSettings() {
+ console.log('showSettings called');
+   console.log('Config values:', {
+    nuclearCost: gameConfig.nuclearCost,
+    nuclearPower: gameConfig.nuclearPower,
+    gasCost: gameConfig.gasCost,
+    gasMaxPower: gameConfig.gasMaxPower,
+    solarCost: gameConfig.solarCost,
+    windCost: gameConfig.windCost,
+    storageCost: gameConfig.storageCost,
+    storageCapacity: gameConfig.storageCapacity
+  });
+  console.log('gameConfig.storageCapacity:', gameConfig.storageCapacity);
   document.getElementById('settingsPanel').style.display = 'block';
   document.querySelector('.game-container').style.pointerEvents = 'none';
   document.querySelector('.game-container').style.opacity = '0.7';
   
-  // Set input values from gameConfig
+  // Set input values from current gameConfig
+  console.log('Nuclear cost element:', document.getElementById('nuclearCost'));
   document.getElementById('nuclearCost').value = gameConfig.nuclearCost;
   document.getElementById('nuclearPower').value = gameConfig.nuclearPower;
   document.getElementById('gasCost').value = gameConfig.gasCost;
@@ -294,19 +317,22 @@ function showSettings() {
   document.getElementById('solarCost').value = gameConfig.solarCost;
   document.getElementById('windCost').value = gameConfig.windCost;
   document.getElementById('storageCost').value = gameConfig.storageCost;
-  document.getElementById('storageCapacity').value = gameConfig.storageCapacity;
+    console.log('Storage capacity element:', document.getElementById('storageCapacity'));
+  document.getElementById('storageCapacityInput').value = gameConfig.storageCapacity;
+    console.log('After setting value:', document.getElementById('storageCapacity').value);
+
 }
 
 function applySettings() {
   // Update game configuration
-  gameConfig.nuclearCost = parseInt(document.getElementById('nuclearCost').value) || 10;
-  gameConfig.nuclearPower = parseInt(document.getElementById('nuclearPower').value) || 8;
-  gameConfig.gasCost = parseInt(document.getElementById('gasCost').value) || 10;
-  gameConfig.gasMaxPower = parseInt(document.getElementById('gasMaxPower').value) || 6;
-  gameConfig.solarCost = parseInt(document.getElementById('solarCost').value) || 3;
-  gameConfig.windCost = parseInt(document.getElementById('windCost').value) || 3;
-  gameConfig.storageCost = parseInt(document.getElementById('storageCost').value) || 4;
-  gameConfig.storageCapacity = parseInt(document.getElementById('storageCapacity').value) || 10;
+gameConfig.nuclearCost = parseInt(document.getElementById('nuclearCost').value) || DEFAULTS.nuclearCost;
+  gameConfig.nuclearPower = parseInt(document.getElementById('nuclearPower').value) || DEFAULTS.nuclearPower;
+  gameConfig.gasCost = parseInt(document.getElementById('gasCost').value) || DEFAULTS.gasCost;
+  gameConfig.gasMaxPower = parseInt(document.getElementById('gasMaxPower').value) || DEFAULTS.gasMaxPower;
+  gameConfig.solarCost = parseInt(document.getElementById('solarCost').value) || DEFAULTS.solarCost;
+  gameConfig.windCost = parseInt(document.getElementById('windCost').value) || DEFAULTS.windCost;
+  gameConfig.storageCost = parseInt(document.getElementById('storageCost').value) || DEFAULTS.storageCost;
+  gameConfig.storageCapacity = parseInt(document.getElementById('storageCapacityInput').value) || DEFAULTS.storageCapacity;
 
   // Hide settings and enable game
   document.getElementById('settingsPanel').style.display = 'none';
@@ -315,6 +341,76 @@ function applySettings() {
 
   // Update display of costs
   updateCostDisplay();
+}
+
+function updateStorageLabels() {
+  const spaceRemaining = getStorageCapacity() - storageAmount;
+  document.getElementById('storageInLabel').textContent = `Send to Storage (space remaining: ${spaceRemaining}):`;
+  document.getElementById('storageOutLabel').textContent = `Remove from Storage (available: ${storageAmount}):`;
+}
+
+function storeExcess() {
+  if (step !== "roll_done") return;
+  
+  let gasProd = parseInt(document.getElementById('gasProduction').value, 10) || 0;
+  let storageIn = parseInt(document.getElementById('storageIn').value, 10) || 0;
+  let storageOut = parseInt(document.getElementById('storageOut').value, 10) || 0;
+  
+  let finalSupply = solarProd + windProd + nuclearProd + gasProd + storageOut - storageIn;
+  let excess = Math.max(0, finalSupply - demand);
+  
+  let spaceRemaining = getStorageCapacity() - storageAmount;
+  let additionalStorage = Math.min(excess, spaceRemaining);
+  
+  document.getElementById('storageIn').value = storageIn + additionalStorage;
+  updateDynamicRemainingDemand();
+}
+
+function meetDemand() {
+  if (step !== "roll_done") return;
+  
+  let gasProd = parseInt(document.getElementById('gasProduction').value, 10) || 0;
+  let storageIn = parseInt(document.getElementById('storageIn').value, 10) || 0;
+  let storageOut = parseInt(document.getElementById('storageOut').value, 10) || 0;
+  
+  let finalSupply = solarProd + windProd + nuclearProd + gasProd + storageOut - storageIn;
+  let remaining = Math.max(0, demand - finalSupply);
+  
+  let additionalFromStorage = Math.min(remaining, storageAmount - storageOut);
+  
+  document.getElementById('storageOut').value = storageOut + additionalFromStorage;
+  updateDynamicRemainingDemand();
+}
+
+function updateButtonStates() {
+  let gasProd = parseInt(document.getElementById('gasProduction').value, 10) || 0;
+  let storageIn = parseInt(document.getElementById('storageIn').value, 10) || 0;
+  let storageOut = parseInt(document.getElementById('storageOut').value, 10) || 0;
+  
+  let finalSupply = solarProd + windProd + nuclearProd + gasProd + storageOut - storageIn;
+  let excess = Math.max(0, finalSupply - demand);
+  let remaining = Math.max(0, demand - finalSupply);
+  
+  let spaceRemaining = getStorageCapacity() - storageAmount;
+  
+  // Update Store All Excess button
+  const storeExcessButton = document.getElementById('storeExcessButton');
+  storeExcessButton.disabled = (excess === 0 || spaceRemaining === 0);
+  storeExcessButton.style.opacity = storeExcessButton.disabled ? '0.5' : '1';
+  
+  // Update Meet Demand button
+  const meetDemandButton = document.getElementById('meetDemandButton');
+  meetDemandButton.disabled = (remaining === 0 || storageAmount === 0);
+  meetDemandButton.style.opacity = meetDemandButton.disabled ? '0.5' : '1';
+}
+
+// Update rollDemandAndProduction to initialize labels
+function rollDemandAndProduction() {
+  // Previous code...
+  
+  updateGasProductionLabel();
+  updateStorageLabels();
+  updateButtonStates();
 }
 
 function updateCostDisplay() {
@@ -332,6 +428,11 @@ function updateCostDisplay() {
 	rows[4].querySelector('.info').textContent = `Capacity = ${gameConfig.storageCapacity} * owned`;
 }
 
+function updateGasProductionLabel() {
+  const maxGas = gameConfig.gasMaxPower * gasCount;
+  document.getElementById('gasProductionLabel').textContent = `Gas Production (0 to ${maxGas}):`;
+}
+
 function finalizeRound() {
   if (step !== "roll_done") return;
 
@@ -339,13 +440,27 @@ function finalizeRound() {
   let storageIn = parseInt(document.getElementById('storageIn').value, 10) || 0;
   let storageOut = parseInt(document.getElementById('storageOut').value, 10) || 0;
 
-  // Validate gas
-  if (gasProd > 6 * gasCount) {
-    alert("You can't produce more gas than ${gameConfig.gasMaxPower} * gasCount.");
+  let supplyBeforeStorage = solarProd + windProd + nuclearProd + gasProd;
+  let demandBeforeStorage = demand;
+  let remainingDemandBeforeStorage = Math.max(0, demandBeforeStorage - supplyBeforeStorage);
+
+  // Check if trying to store while demand isn't met
+  if (storageIn > 0 && remainingDemandBeforeStorage > 0) {
+    alert("You cannot store energy while there is still unmet demand!");
     return;
   }
 
-  let supplyBeforeStorage = solarProd + windProd + nuclearProd + gasProd;
+  // Check if not using available storage to meet demand
+  if (storageAmount > 0 && remainingDemandBeforeStorage > 0 && storageOut < Math.min(storageAmount, remainingDemandBeforeStorage)) {
+    alert("You must use your stored energy to meet as much demand as possible!");
+    return;
+  }
+
+  // Validate gas
+  if (gasProd > 6 * gasCount) {
+    alert(`You can't produce more gas than ${gameConfig.gasMaxPower} * gasCount.`);
+    return;
+  }
 
   // Storage checks
   if (storageOut > storageAmount) {
@@ -435,8 +550,9 @@ function finalizeRound() {
 
 // Wait for DOM to be ready before initializing
 document.addEventListener('DOMContentLoaded', function() {
+  showSettings();
   updateUI();
-showSettings();
+    updateCostDisplay(); // Add this line
 });
 </script>
 </head>
@@ -524,7 +640,7 @@ showSettings();
           <tr>
             <td>
               Storage
-              <div class="info">Capacity = 10 * owned</div>
+              <div class="info">Capacity = loading...</div>
             </td>
             <td>4</td>
             <td>
@@ -554,26 +670,28 @@ showSettings();
       <table>
         <tbody>
 			<tr>
-			  <td>Gas Production (0 to 6 * gasCount):</td>
-			  <td style="display: flex; align-items: center; gap: 5px;">
-				<input type="number" id="gasProduction" value="0" min="0" oninput="updateDynamicRemainingDemand()"/>
-				<button onclick="maxGas()" style="padding: 2px 6px; font-size: 12px;">Max</button>
-			  </td>
-			</tr>
-			<tr>
-			  <td>Send to Storage:</td>
-			  <td style="display: flex; align-items: center; gap: 5px;">
-				<input type="number" id="storageIn" value="0" min="0" oninput="updateDynamicRemainingDemand()"/>
-				<button onclick="maxStorageIn()" style="padding: 2px 6px; font-size: 12px;">Max</button>
-			  </td>
-			</tr>
-			<tr>
-			  <td>Remove from Storage:</td>
-			  <td style="display: flex; align-items: center; gap: 5px;">
-				<input type="number" id="storageOut" value="0" min="0" oninput="updateDynamicRemainingDemand()"/>
-				<button onclick="maxStorageOut()" style="padding: 2px 6px; font-size: 12px;">Max</button>
-			  </td>
-			</tr>
+  <td id="gasProductionLabel">Gas Production (0 to 0):</td>
+  <td style="display: flex; align-items: center; gap: 5px;">
+    <input type="number" id="gasProduction" value="0" min="0" oninput="updateDynamicRemainingDemand()"/>
+    <button onclick="maxGas()" style="padding: 2px 6px; font-size: 12px;">Max</button>
+  </td>
+</tr>
+<tr>
+  <td id="storageInLabel">Send to Storage (space remaining: 0):</td>
+  <td style="display: flex; align-items: center; gap: 5px;">
+    <input type="number" id="storageIn" value="0" min="0" oninput="updateDynamicRemainingDemand()"/>
+    <button onclick="maxStorageIn()" style="padding: 2px 6px; font-size: 12px;">Max</button>
+    <button onclick="storeExcess()" id="storeExcessButton" style="padding: 2px 6px; font-size: 12px;">Store All Excess</button>
+  </td>
+</tr>
+<tr>
+  <td id="storageOutLabel">Remove from Storage (available: 0):</td>
+  <td style="display: flex; align-items: center; gap: 5px;">
+    <input type="number" id="storageOut" value="0" min="0" oninput="updateDynamicRemainingDemand()"/>
+    <button onclick="maxStorageOut()" style="padding: 2px 6px; font-size: 12px;">Max</button>
+    <button onclick="meetDemand()" id="meetDemandButton" style="padding: 2px 6px; font-size: 12px;">Meet Demand</button>
+  </td>
+</tr>
         </tbody>
       </table>
 
@@ -622,14 +740,16 @@ showSettings();
       <td>Wind Plant Cost:</td>
       <td><input type="number" id="windCost" min="1"/></td>
     </tr>
+	
     <tr>
       <td>Storage Cost:</td>
       <td><input type="number" id="storageCost" min="1"/></td>
     </tr>
-    <tr>
+	<tr>
       <td>Storage Capacity (per unit):</td>
-      <td><input type="number" id="storageCapacity" min="1"/></td>
+      <td><input type="number" id="storageCapacityInput" min="1"/></td>
     </tr>
+
   </table>
   <button onclick="applySettings()" style="margin-top: 10px;">Start Game</button>
 </div>
