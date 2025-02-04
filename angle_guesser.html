@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Angle Guessing Game</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      margin: 20px;
+    }
+    #gameContainer {
+      display: flex;
+      align-items: flex-start;
+    }
+    #canvasContainer {
+      margin-right: 20px;
+    }
+    #angleCanvas {
+      border: 1px solid #ccc;
+      background: #f9f9f9;
+    }
+    #historyTable {
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+    #historyTable th, #historyTable td {
+      border: 1px solid #ccc;
+      padding: 4px 8px;
+      text-align: center;
+    }
+    #angleInfo {
+      margin-bottom: 10px;
+      font-size: 16px;
+    }
+    input[type="number"] {
+      width: 240px;
+      font-size: 16px;
+      padding: 5px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Angle Guessing Game</h1>
+  <div id="angleInfo"></div>
+  <div id="gameContainer">
+    <div id="canvasContainer">
+      <canvas id="angleCanvas" width="300" height="300"></canvas>
+      <br>
+      <input type="number" id="guessInput" placeholder="Enter angle guess (°)" autofocus>
+      <p style="font-size: 12px; color: #666;">
+        Type your guess and hit Enter. After your guess appears (with a red line), press Enter again for a new angle.
+      </p>
+    </div>
+    <div id="historyContainer">
+      <h3>History</h3>
+      <table id="historyTable">
+        <thead>
+          <tr>
+            <th>Round</th>
+            <th>True Angle (°)</th>
+            <th>Guess (°)</th>
+            <th>Difference (°)</th>
+            <th>Avg Last 10 (°)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <!-- History rows will be inserted here -->
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    // Global variables to track game state
+    let currentRound = 0;
+    let trueAngle = 0;  // True angle for the current round
+    let history = [];   // Array to store round results
+    let roundComplete = false; // Whether the current round's guess has been processed
+
+    // Returns a random integer between 1 and 90 (inclusive)
+    function randomAngle() {
+      return Math.floor(Math.random() * 90) + 1;
+    }
+
+    // Starts a new round: resets the canvas, clears the input, chooses a new true angle.
+    function newRound() {
+      currentRound++;
+      roundComplete = false;
+      trueAngle = randomAngle();
+      document.getElementById('guessInput').value = '';
+      document.getElementById('guessInput').placeholder = "Enter angle guess (°)";
+      updateAngleInfo("");
+      drawAngle(trueAngle, null);
+    }
+
+    // Draws the angle on the canvas.
+    // Always draws two black lines:
+    //   1. A horizontal line (from the origin)
+    //   2. A line rotated counterclockwise by the true angle.
+    // If guessedAngle is provided, also draws a red line at that angle.
+    function drawAngle(trueAngle, guessedAngle) {
+      const canvas = document.getElementById('angleCanvas');
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      const lineLength = 100;
+      
+      // Translate origin to canvas center
+      ctx.save();
+      ctx.translate(canvas.width / 2, canvas.height / 2);
+
+      // Draw the horizontal line in black
+      ctx.strokeStyle = 'black';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(lineLength, 0);
+      ctx.stroke();
+
+      // Draw the true-angle line in black
+      const trueRad = trueAngle * Math.PI / 180;
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(lineLength * Math.cos(trueRad), -lineLength * Math.sin(trueRad));
+      ctx.stroke();
+
+      // If a guess has been made, draw the guessed-angle line in red
+      if (guessedAngle !== null && guessedAngle !== undefined) {
+        ctx.strokeStyle = 'red';
+        ctx.beginPath();
+        const guessRad = guessedAngle * Math.PI / 180;
+        ctx.moveTo(0, 0);
+        ctx.lineTo(lineLength * Math.cos(guessRad), -lineLength * Math.sin(guessRad));
+        ctx.stroke();
+      }
+
+      ctx.restore();
+    }
+
+    // Updates the text above the canvas with angle information.
+    function updateAngleInfo(text) {
+      document.getElementById('angleInfo').innerText = text;
+    }
+
+    // Updates the history table with the rounds played so far.
+    function updateHistoryTable() {
+      const tbody = document.getElementById('historyTable').getElementsByTagName('tbody')[0];
+      tbody.innerHTML = ''; // Clear previous rows
+
+      history.forEach((entry, index) => {
+        const tr = document.createElement('tr');
+
+        // Round number
+        const roundCell = document.createElement('td');
+        roundCell.innerText = entry.round;
+        tr.appendChild(roundCell);
+
+        // True angle
+        const trueAngleCell = document.createElement('td');
+        trueAngleCell.innerText = entry.trueAngle;
+        tr.appendChild(trueAngleCell);
+
+        // Guessed angle
+        const guessCell = document.createElement('td');
+        guessCell.innerText = entry.guess;
+        tr.appendChild(guessCell);
+
+        // Difference between true angle and guess
+        const diffCell = document.createElement('td');
+        diffCell.innerText = entry.diff;
+        tr.appendChild(diffCell);
+
+        // Running average over the last 10 rounds (if available)
+        const avgCell = document.createElement('td');
+        if (index >= 9) {
+          let sum = 0;
+          for (let j = index - 9; j <= index; j++) {
+            sum += history[j].diff;
+          }
+          avgCell.innerText = (sum / 10).toFixed(2);
+        } else {
+          avgCell.innerText = "";
+        }
+        tr.appendChild(avgCell);
+
+        tbody.appendChild(tr);
+      });
+    }
+
+    // Processes the player's guess:
+    //   - Reads the input value.
+    //   - Draws the red line (for the guess).
+    //   - Displays the guess and true angle.
+    //   - Updates the history.
+    function processGuess() {
+      const guessInput = document.getElementById('guessInput');
+      const guessValue = parseFloat(guessInput.value);
+      if (isNaN(guessValue)) {
+        return; // Do nothing if input is not a valid number.
+      }
+
+      // Compute the absolute difference
+      let diff = Math.abs(trueAngle - guessValue);
+      diff = parseFloat(diff.toFixed(2));
+
+      // Update the text info
+      updateAngleInfo(`Your guess: ${guessValue}°; True angle: ${trueAngle}°`);
+
+      // Redraw the canvas to include the red guessed-angle line.
+      drawAngle(trueAngle, guessValue);
+
+      // Save the round's result in the history array.
+      history.push({
+        round: currentRound,
+        trueAngle: trueAngle,
+        guess: guessValue,
+        diff: diff
+      });
+      updateHistoryTable();
+      roundComplete = true;
+    }
+
+    // Event listener for the input box.
+    // When the user presses Enter:
+    //   - If the round is not complete, process the guess.
+    //   - If the round is complete, start a new round.
+    document.getElementById('guessInput').addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') {
+        if (!roundComplete) {
+          processGuess();
+        } else {
+          newRound();
+        }
+      }
+    });
+
+    // Start the first round when the page loads.
+    newRound();
+  </script>
+</body>
+</html>
